@@ -41,3 +41,9 @@
 
     - name: Display access information
       debug:
+        msg: |
+          Argo CD deployed successfully!
+          URL: https://{{ inventory_hostname }}:{{ argocd_nodeport }}
+          Username: admin
+          Password: {{ argocd_password.stdout }}
+          Local access: kubectl port-forward svc/argocd-server -n {{ argocd_namespace }} {{ argocd_nodeport }}:443
