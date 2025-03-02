@@ -1,6 +1,17 @@
 ---
 - name: Configure system prerequisites
   block:
+    - name: Remove existing Kubernetes repo
+      file:
+        path: /etc/yum.repos.d/kubernetes.repo
+        state: absent
+      ignore_errors: yes
+
+    - name: Clean YUM cache
+      command: yum clean all
+      args:
+        warn: no
+
     - name: Set SELinux to permissive
       selinux:
         policy: targeted
@@ -62,6 +73,9 @@
           - docker
           - docker-*
         state: absent
+      args:
+        disable_repo: kubernetes
+        disable_gpg_check: yes
 
     - name: Add Docker CE repository
       yum_repository:
@@ -104,23 +118,4 @@
         dest: /etc/docker/daemon.json
         content: |
           {
-            "exec-opts": ["native.cgroupdriver=systemd"],
-            "log-driver": "json-file",
-            "log-opts": {
-              "max-size": "100m"
-            },
-            "storage-driver": "overlay2"
-          }
-      notify: Restart docker
-
-- name: Configure firewall
-  firewalld:
-    port: "{{ item }}"
-    permanent: yes
-    state: enabled
-  with_items:
-    - 6443/tcp
-    - 2379-2380/tcp
-    - 10250/tcp
-    - 10259/tcp
-    - 10257/tcp
+            "exec-opts": ["native.cgroup
