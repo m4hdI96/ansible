@@ -10,7 +10,7 @@
     - name: Clean YUM cache
       command: yum clean all
       args:
-        warn: no
+    
 
     - name: Set SELinux to permissive
       selinux:
