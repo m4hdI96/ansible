@@ -1,0 +1,18 @@
+- name: Install Kubernetes packages
+  yum:
+    name:
+      - kubelet-{{ kube_version }}
+      - kubeadm-{{ kube_version }}
+      - kubectl-{{ kube_version }}
+    state: present
+
+- name: Enable kubelet
+  systemd:
+    name: kubelet
+    enabled: yes
+    state: started
+
+- name: Join worker node to the cluster
+  shell: |
+    source /tmp/join-command.sh
+  when: inventory_hostname in groups.workers
