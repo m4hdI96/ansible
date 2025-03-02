@@ -1,0 +1,78 @@
+- name: Install required packages
+  yum:
+    name:
+      - curl
+      - wget
+      - vim
+      - net-tools
+      - iputils
+      - jq
+    state: present
+
+- name: Disable Swap
+  command: swapoff -a
+  ignore_errors: yes
+
+- name: Remove Swap entry from fstab
+  mount:
+    name: none
+    fstype: swap
+    state: absent
+  ignore_errors: yes
+
+- name: Configure sysctl settings for Kubernetes
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.ipv4.ip_forward", value: "1" }
+  ignore_errors: yes
+
+- name: Add Kubernetes repository
+  yum_repository:
+    name: kubernetes
+    description: Kubernetes RPM Repository
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg
+    gpgcheck: yes
+    enabled: yes
+
+- name: Install Docker
+  yum:
+    name: docker
+    state: present
+
+- name: Enable and start Docker
+  systemd:
+    name: docker
+    enabled: yes
+    state: started
+
+- name: Install containerd
+  yum:
+    name: containerd
+    state: present
+
+- name: Enable and start containerd
+  systemd:
+    name: containerd
+    enabled: yes
+    state: started
+
+- name: Install Kubernetes packages
+  yum:
+    name:
+      - kubelet-1.32.0
+      - kubeadm-1.32.0
+      - kubectl-1.32.0
+    state: present
+
+- name: Enable kubelet
+  systemd:
+    name: kubelet
+    enabled: yes
+    state: started
