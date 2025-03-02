@@ -57,7 +57,6 @@
       delegate_to: "{{ groups.master[0] }}"
       run_once: yes
 
-  
     - name: Show final status
       debug:
         msg: "Kubernetes cluster deployed successfully! Nodes:\n{{ cluster_health.stdout }}"
