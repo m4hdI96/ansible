@@ -3,9 +3,8 @@
   hosts: all
   become: yes
   vars:
-    kube_version: "1.32.0"
+    kube_version: "1.29.2"
     pod_network_cidr: "10.244.0.0/16"
-
   order: sorted
   serial: 1
 
@@ -58,6 +57,7 @@
       delegate_to: "{{ groups.master[0] }}"
       run_once: yes
 
+  
     - name: Show final status
       debug:
         msg: "Kubernetes cluster deployed successfully! Nodes:\n{{ cluster_health.stdout }}"
