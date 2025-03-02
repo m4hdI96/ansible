@@ -8,9 +8,8 @@
       ignore_errors: yes
 
     - name: Clean YUM cache
-      command: yum clean all
-
-    
+      yum:
+        clean: all
 
     - name: Set SELinux to permissive
       selinux:
@@ -67,14 +66,13 @@
 - name: Configure container runtime
   block:
     - name: Remove conflicting packages
-      yum:
+      dnf:
         name:
           - podman-docker
           - docker
           - docker-*
         state: absent
-      args:
-        disable_repo: kubernetes
+        disablerepo: "kubernetes"
         disable_gpg_check: yes
 
     - name: Add Docker CE repository
@@ -118,4 +116,23 @@
         dest: /etc/docker/daemon.json
         content: |
           {
-            "exec-opts": ["native.cgroup
+            "exec-opts": ["native.cgroupdriver=systemd"],
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "100m"
+            },
+            "storage-driver": "overlay2"
+          }
+      notify: Restart docker
+
+- name: Configure firewall
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+  with_items:
+    - 6443/tcp
+    - 2379-2380/tcp
+    - 10250/tcp
+    - 10259/tcp
+    - 10257/tcp
