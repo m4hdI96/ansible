@@ -1,16 +1,7 @@
+
 ---
 - name: Configure system prerequisites
   block:
-    - name: Remove existing Kubernetes repo
-      file:
-        path: /etc/yum.repos.d/kubernetes.repo
-        state: absent
-      ignore_errors: yes
-
-    - name: Clean YUM cache
-      yum:
-        clean: all
-
     - name: Set SELinux to permissive
       selinux:
         policy: targeted
@@ -65,16 +56,7 @@
 
 - name: Configure container runtime
   block:
-    - name: Remove conflicting packages
-      dnf:
-        name:
-          - podman-docker
-          - docker
-          - docker-*
-        state: absent
-        disablerepo: "kubernetes"
-        disable_gpg_check: yes
-
+    
     - name: Add Docker CE repository
       yum_repository:
         name: docker-ce
@@ -136,3 +118,4 @@
     - 10250/tcp
     - 10259/tcp
     - 10257/tcp
+
