@@ -6,7 +6,6 @@
     argocd_version: "v2.9.3"
     argocd_namespace: "argocd"
     argocd_port: 8080
-    argocd_nodeport: 32686
 
   tasks:
     - name: Verify cluster connectivity
@@ -25,12 +24,13 @@
       shell: |
         kubectl apply -n {{ argocd_namespace }} -f https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml
 
-    - name: Expose Argo CD Server (NodePort 32686)
+    - name: Expose Argo CD Server (NodePort)
       shell: |
-        kubectl patch svc argocd-server -n {{ argocd_namespace }} -p '{"spec": {"type": "NodePort", "ports": [{"port": 443, "nodePort": 32686}]}}'
+        sudo kubectl patch svc argocd-server  -n argocd -p '{"spec": {"type": "NodePort"}}'
+
       register: svc_patch
       changed_when: "'no change' not in svc_patch.stdout"
-
+      
     - name: Get Argo CD admin password
       shell: |
         kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret \
@@ -42,8 +42,8 @@
     - name: Display access information
       debug:
         msg: |
-          Argo CD deployed successfully!
-          URL: https://{{ inventory_hostname }}:{{ argocd_nodeport }}
-          Username: admin
-          Password: {{ argocd_password.stdout }}
-          Local access: kubectl port-forward svc/argocd-server -n {{ argocd_namespace }} {{ argocd_nodeport }}:443
+          Argo CD dÃ©ployÃ© avec succÃ¨s !
+          URL: https://{{ inventory_hostname }}:{{ argocd_port }}
+          Utilisateur: admin
+          Mot de passe: {{ argocd_password.stdout }}
+          AccÃ¨s local: kubectl port-forward svc/argocd-server -n {{ argocd_namespace }} {{ argocd_port }}:443
