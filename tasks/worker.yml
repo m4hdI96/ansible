@@ -1,3 +1,4 @@
+
 ---
 - name: Prepare Kubernetes components
   block:
@@ -16,7 +17,7 @@
         baseurl: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
         gpgkey: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/repodata/repomd.xml.key
         gpgcheck: yes
-        repo_gpgcheck: no
+        repo_gpgcheck: yes
         enabled: yes
 
     - name: Install worker packages
@@ -25,6 +26,39 @@
           - kubelet-{{ kube_version }}
           - kubeadm-{{ kube_version }}
         state: present
+
+    - name: Add Docker and containerd repository
+      yum_repository:
+        name: docker-ce
+        description: Docker CE Repository
+        baseurl: https://download.docker.com/linux/centos/7/x86_64/stable/
+        gpgkey: https://download.docker.com/linux/centos/gpg
+        gpgcheck: yes
+        enabled: yes
+
+    - name: Install container runtime (containerd)
+      yum:
+        name:
+          - containerd.io
+        state: present
+
+    - name: Configure containerd
+      shell: |
+        mkdir -p /etc/containerd
+        containerd config default > /etc/containerd/config.toml
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+
+    - name: Enable and start containerd
+      systemd:
+        name: containerd
+        enabled: yes
+        state: restarted
+
+    - name: Ensure kubelet is enabled
+      systemd:
+        name: kubelet
+        enabled: yes
+        state: restarted
 
 - name: Join cluster process
   block:
@@ -40,6 +74,7 @@
       when: inventory_hostname in groups.workers
       ignore_errors: yes
 
+
     - name: Regenerate join command if missing
       shell: |
         kubeadm token create --print-join-command > /tmp/join-command.sh
@@ -48,8 +83,4 @@
       run_once: yes
       when: join_command.failed
 
-    - name: Join Kubernetes cluster
-      command: "{{ join_command.stdout }} --ignore-preflight-errors=Swap"
-      when: join_command.stdout is defined
-      args:
-        creates: /etc/kubernetes/kubelet.conf
+
