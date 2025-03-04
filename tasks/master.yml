@@ -12,6 +12,28 @@
         enabled: yes
         state: started
 
+    - name: Configure containerd to use SystemdCgroup
+      block:
+        - name: Create containerd config directory
+          file:
+            path: /etc/containerd
+            state: directory
+
+        - name: Generate containerd default config
+          command: containerd config default
+          register: containerd_config
+          changed_when: false
+
+        - name: Apply SystemdCgroup setting
+          copy:
+            dest: /etc/containerd/config.toml
+            content: "{{ containerd_config.stdout | regex_replace('SystemdCgroup = false', 'SystemdCgroup = true') }}"
+
+        - name: Restart containerd
+          systemd:
+            name: containerd
+            state: restarted
+
 - name: Install Kubernetes components
   block:
     - name: Add Kubernetes repo
@@ -21,7 +43,7 @@
         baseurl: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
         gpgkey: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/repodata/repomd.xml.key
         gpgcheck: yes
-        repo_gpgcheck: no
+        repo_gpgcheck: yes
         enabled: yes
 
     - name: Install Kubernetes packages
@@ -43,9 +65,9 @@
       template:
         src: templates/kubeadm-config.j2
         dest: /tmp/kubeadm-config.yaml
-        
-    - name: Label master node
-      command: kubectl label nodes {{ inventory_hostname }} node-role.kubernetes.io/master=""
+
+    - name: Label master node with control-plane role
+      command: kubectl label nodes {{ inventory_hostname }} node-role.kubernetes.io/control-plane=""
       when: inventory_hostname in groups.master
       ignore_errors: yes
 
@@ -58,7 +80,7 @@
       args:
         creates: /etc/kubernetes/admin.conf
 
-    - name: Configure kubectl
+    - name: Configure kubectl for the current user
       shell: |
         mkdir -p $HOME/.kube
         cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
@@ -69,7 +91,7 @@
         kubeadm token create --print-join-command > /tmp/join-command.sh
         chmod 644 /tmp/join-command.sh
 
-    - name: Verify token
+    - name: Verify join command
       shell: cat /tmp/join-command.sh
 
     - name: Install Flannel CNI
@@ -83,7 +105,7 @@
       changed_when: false
       failed_when: join_verify.rc != 0
       run_once: yes
-  
+
     - name: Configure CoreDNS
       block:
         - name: Deploy CoreDNS config
@@ -99,3 +121,4 @@
         - name: Restart CoreDNS pods
           shell: kubectl delete pod -n kube-system -l k8s-app=kube-dns
           when: dns_apply.changed
+
