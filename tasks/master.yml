@@ -1,4 +1,30 @@
 ---
+# tasks/master.yml
+
+# 1) Generate & expose an SSH keypair for pfe on the master node
+- name: Ensure /home/pfe/.ssh exists on master
+  file:
+    path: /home/pfe/.ssh
+    state: directory
+    owner: pfe
+    group: pfe
+    mode: '0700'
+
+- name: Generate SSH keypair for pfe (if missing)
+  openssh_keypair:
+    path: /home/pfe/.ssh/id_rsa
+    type: rsa
+    size: 4096
+    owner: pfe
+    group: pfe
+    mode: '0600'
+  register: master_key
+
+- name: Save controller public key for distribution
+  set_fact:
+    controller_pubkey: "{{ master_key.public_key }}"
+
+# 2) The rest of your master setup...
 - name: Install required packages
   block:
     - name: Install containerd
