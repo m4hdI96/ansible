@@ -1,5 +1,22 @@
-
 ---
+# tasks/worker.yml
+
+# 1) Install the master’s public key into each worker’s authorized_keys
+- name: Ensure /home/pfe/.ssh exists on worker
+  file:
+    path: /home/pfe/.ssh
+    state: directory
+    owner: pfe
+    group: pfe
+    mode: '0700'
+
+- name: Authorize controller’s SSH key on worker
+  authorized_key:
+    user: pfe
+    key: "{{ hostvars[groups.master[0]].controller_pubkey }}"
+    state: present
+
+# 2) The rest of your worker setup...
 - name: Prepare Kubernetes components
   block:
     - name: Install dependencies
@@ -77,8 +94,6 @@
       run_once: yes
       when: join_command.failed
 
-    # Critical missing step: Execute the join command on workers
     - name: Join worker to cluster
       command: "{{ join_command.stdout }}"
       when: inventory_hostname in groups.workers
-
