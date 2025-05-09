@@ -1,9 +1,8 @@
+# k8s.yml
 ---
 - name: Deploy Kubernetes Cluster
   hosts: all
   become: yes
-
-  # Skip the built-in fact gathering until after Python is in place
   gather_facts: false
 
   pre_tasks:
@@ -30,7 +29,7 @@
         path: /usr/bin/python3
         timeout: 300
 
-    - name: Tell Ansible to use Python3 from now on
+    - name: Use Python3 from now on
       set_fact:
         ansible_python_interpreter: /usr/bin/python3
 
@@ -41,7 +40,6 @@
     kube_version: "1.29.2"
     pod_network_cidr: "10.244.0.0/16"
 
-  # Your handlers remain unchanged
   handlers:
     - name: Restart containerd
       systemd:
@@ -58,7 +56,6 @@
         msg: "Reboot required for kernel changes"
         reboot_timeout: 600
 
-  # Main tasks
   tasks:
     - name: Configure all nodes
       include_tasks: tasks/common.yml
