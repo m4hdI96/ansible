@@ -1,7 +1,6 @@
----
 # tasks/worker.yml
-
-# 1) Install the master’s public key into each worker’s authorized_keys
+---
+# 1) Ensure the SSH directory exists
 - name: Ensure /home/pfe/.ssh exists on worker
   file:
     path: /home/pfe/.ssh
@@ -10,13 +9,14 @@
     group: pfe
     mode: '0700'
 
+# 2) Authorize the controller’s key
 - name: Authorize controller’s SSH key on worker
   authorized_key:
     user: pfe
     key: "{{ hostvars[groups.master[0]].controller_pubkey }}"
     state: present
 
-# 2) The rest of your worker setup...
+# 3) Install prerequisites for container runtime
 - name: Prepare Kubernetes components
   block:
     - name: Install dependencies
@@ -37,29 +37,19 @@
         repo_gpgcheck: yes
         enabled: yes
 
-    - name: Install worker packages
+    - name: Install kubelet and kubeadm
       yum:
         name:
           - kubelet-{{ kube_version }}
           - kubeadm-{{ kube_version }}
         state: present
 
-    - name: Add Docker and containerd repository
-      yum_repository:
-        name: docker-ce
-        description: Docker CE Repository
-        baseurl: https://download.docker.com/linux/centos/7/x86_64/stable/
-        gpgkey: https://download.docker.com/linux/centos/gpg
-        gpgcheck: yes
-        enabled: yes
-
-    - name: Install container runtime (containerd)
+    - name: Install containerd runtime
       yum:
-        name:
-          - containerd.io
+        name: containerd.io
         state: present
 
-    - name: Configure containerd
+    - name: Configure containerd for systemd cgroup
       shell: |
         mkdir -p /etc/containerd
         containerd config default > /etc/containerd/config.toml
@@ -71,29 +61,26 @@
         enabled: yes
         state: restarted
 
-    - name: Ensure kubelet is enabled
+    - name: Enable kubelet
       systemd:
         name: kubelet
         enabled: yes
         state: restarted
 
-- name: Join cluster process
-  block:
-    - name: Fetch join command from master
-      command: cat /tmp/join-command.sh
-      register: join_command
-      delegate_to: "{{ groups.master[0] }}"
-      run_once: yes
-      ignore_errors: yes
+# 4) Join the cluster
+- name: Fetch join command from master
+  command: cat /tmp/join-command.sh
+  register: join_command
+  delegate_to: "{{ groups.master[0] }}"
+  run_once: yes
+  ignore_errors: yes
 
-    - name: Regenerate join command if missing
-      shell: |
-        kubeadm token create --print-join-command > /tmp/join-command.sh
-        chmod 600 /tmp/join-command.sh
-      delegate_to: "{{ groups.master[0] }}"
-      run_once: yes
-      when: join_command.failed
+- name: Recreate join command if missing
+  shell: kubeadm token create --print-join-command > /tmp/join-command.sh
+  delegate_to: "{{ groups.master[0] }}"
+  run_once: yes
+  when: join_command.failed
 
-    - name: Join worker to cluster
-      command: "{{ join_command.stdout }}"
-      when: inventory_hostname in groups.workers
+- name: Execute join command
+  command: "{{ join_command.stdout }}"
+  when: inventory_hostname in groups.workers
