@@ -1,6 +1,5 @@
 # tasks/master.yml
 ---
-# 1) Ensure the SSH directory exists
 - name: Ensure /home/pfe/.ssh exists on master
   file:
     path: /home/pfe/.ssh
@@ -9,14 +8,12 @@
     group: pfe
     mode: '0700'
 
-# 2) Generate keypair if missing
 - name: Generate SSH keypair for pfe (if missing)
   become_user: pfe
   command: ssh-keygen -t rsa -b 4096 -f /home/pfe/.ssh/id_rsa -N ''
   args:
     creates: /home/pfe/.ssh/id_rsa
 
-# 3) Fix permissions on the keys
 - name: Set permissions on private key
   file:
     path: /home/pfe/.ssh/id_rsa
@@ -31,7 +28,6 @@
     group: pfe
     mode: '0644'
 
-# 4) Read the public key into a fact
 - name: Read controller public key
   slurp:
     src: /home/pfe/.ssh/id_rsa.pub
@@ -41,8 +37,7 @@
   set_fact:
     controller_pubkey: "{{ slurped_master_pubkey.content | b64decode }}"
 
-# 5) Install & configure container runtime
-- name: Install required packages
+- name: Install & configure containerd
   block:
     - name: Install containerd
       yum:
@@ -75,8 +70,7 @@
         name: containerd
         state: restarted
 
-# 6) Install & enable Kubernetes components
-- name: Install Kubernetes components
+- name: Install Kubernetes components on master
   block:
     - name: Add Kubernetes repo
       yum_repository:
@@ -101,8 +95,7 @@
         name: kubelet
         enabled: yes
 
-# 7) Initialize the control plane
-- name: Initialize cluster
+- name: Initialize control plane
   block:
     - name: Create kubeadm config file
       template:
@@ -119,12 +112,21 @@
       args:
         creates: /etc/kubernetes/admin.conf
 
-    - name: Configure kubectl for pfe
-      become_user: pfe
-      shell: |
-        mkdir -p /home/pfe/.kube
-        cp -f /etc/kubernetes/admin.conf /home/pfe/.kube/config
-        chown pfe:pfe /home/pfe/.kube/config
+    - name: Ensure .kube directory for pfe
+      file:
+        path: /home/pfe/.kube
+        state: directory
+        owner: pfe
+        group: pfe
+        mode: '0700'
+
+    - name: Copy admin.conf to pfe’s kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/pfe/.kube/config
+        owner: pfe
+        group: pfe
+        mode: '0644'
 
     - name: Generate worker join command
       shell: kubeadm token create --print-join-command > /tmp/join-command.sh
