@@ -2,8 +2,20 @@
 - name: Configure system prerequisites
   block:
     - name: Install firewalld dependencies
-      yum:
+      dnf:
         name: python3-firewalld
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install SELinux dependencies
+      dnf:
+        name: libselinux-python3
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install python3-pyudev for modprobe
+      dnf:
+        name: python3-pyudev
         state: present
       when: ansible_os_family == "RedHat"
 
@@ -14,7 +26,7 @@
       changed_when: false
 
     - name: Set SELinux to permissive
-      selinux:
+      ansible.posix.selinux:
         policy: targeted
         state: permissive
       when: selinux_status.rc == 0
@@ -41,7 +53,7 @@
       notify: Reboot system
 
     - name: Load kernel modules
-      modprobe:
+      community.general.modprobe:
         name: "{{ item }}"
         state: present
       with_items:
@@ -69,9 +81,14 @@
     - name: Flush handlers to apply reboots
       meta: flush_handlers
 
+    - name: Wait for node to be reachable after reboot
+      wait_for_connection:
+        timeout: 600
+      when: ansible_reboot_pending | default(false)
+
 - name: Configure container runtime
   block:
-    - name: Add Docker CE repository
+    - name: Add Docker CE repository (CentOS 7)
       yum_repository:
         name: docker-ce
         description: Docker CE Stable
@@ -81,8 +98,18 @@
         enabled: yes
       when: ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
 
+    - name: Add Docker CE repository (CentOS 8)
+      dnf_repository:
+        name: docker-ce
+        description: Docker CE Stable
+        baseurl: https://download.docker.com/linux/centos/8/$basearch/stable
+        gpgkey: https://download.docker.com/linux/centos/gpg
+        gpgcheck: yes
+        enabled: yes
+      when: ansible_distribution == "CentOS" and ansible_distribution_major_version == "8"
+
     - name: Install containerd.io
-      yum:
+      dnf:
         name: containerd.io
         state: present
 
@@ -102,7 +129,7 @@
       notify: Restart containerd
 
     - name: Install Docker CE
-      yum:
+      dnf:
         name:
           - docker-ce
           - docker-ce-cli
