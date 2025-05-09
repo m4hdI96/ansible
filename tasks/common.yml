@@ -1,3 +1,4 @@
+# tasks/common.yml
 ---
 - name: Configure system prerequisites
   block:
@@ -56,7 +57,7 @@
       community.general.modprobe:
         name: "{{ item }}"
         state: present
-      with_items:
+      loop:
         - br_netfilter
         - overlay
 
@@ -66,10 +67,11 @@
         value: "{{ item.value }}"
         state: present
         reload: yes
-      with_dict:
-        net.bridge.bridge-nf-call-ip6tables: 1
-        net.bridge.bridge-nf-call-iptables: 1
-        net.ipv4.ip_forward: 1
+      loop: "{{ lookup('dict', {
+        'net.bridge.bridge-nf-call-ip6tables': 1,
+        'net.bridge.bridge-nf-call-iptables':   1,
+        'net.ipv4.ip_forward':                  1
+      }) }}"
 
     - name: Persist kernel settings
       copy:
@@ -98,15 +100,15 @@
         enabled: yes
       when: ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
 
-    - name: Add Docker CE repository (CentOS 8)
-      dnf_repository:
+    - name: Add Docker CE repository (CentOS 8+)
+      yum_repository:
         name: docker-ce
         description: Docker CE Stable
-        baseurl: https://download.docker.com/linux/centos/8/$basearch/stable
+        baseurl: https://download.docker.com/linux/centos/$releasever/$basearch/stable
         gpgkey: https://download.docker.com/linux/centos/gpg
         gpgcheck: yes
         enabled: yes
-      when: ansible_distribution == "CentOS" and ansible_distribution_major_version == "8"
+      when: ansible_distribution == "CentOS" and (ansible_distribution_major_version | int) >= 8
 
     - name: Install containerd.io
       dnf:
@@ -154,7 +156,7 @@
     port: "{{ item }}"
     permanent: yes
     state: enabled
-  with_items:
+  loop:
     - 6443/tcp
     - 2379-2380/tcp
     - 10250/tcp
