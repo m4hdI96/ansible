@@ -28,7 +28,7 @@
 - name: Install required packages
   block:
     - name: Install containerd
-      dnf:
+      yum:
         name: containerd
         state: present
 
@@ -63,7 +63,7 @@
 - name: Install Kubernetes components
   block:
     - name: Add Kubernetes repo
-      dnf_repository:
+      yum_repository:
         name: kubernetes
         description: Kubernetes RPM Repository
         baseurl: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
@@ -73,7 +73,7 @@
         enabled: yes
 
     - name: Install Kubernetes packages
-      dnf:
+      yum:
         name:
           - kubelet-{{ kube_version }}
           - kubeadm-{{ kube_version }}
@@ -147,8 +147,3 @@
         - name: Restart CoreDNS pods
           shell: kubectl delete pod -n kube-system -l k8s-app=kube-dns
           when: dns_apply.changed
-
-- name: Wait for node to be reachable after reboot
-  wait_for_connection:
-    timeout: 600
-  when: ansible_reboot_pending | default(false)
