@@ -20,7 +20,7 @@
 - name: Prepare Kubernetes components
   block:
     - name: Install dependencies
-      dnf:
+      yum:
         name:
           - yum-utils
           - device-mapper-persistent-data
@@ -28,7 +28,7 @@
         state: present
 
     - name: Add Kubernetes repository
-      dnf_repository:
+      yum_repository:
         name: kubernetes
         description: Kubernetes RPM Repository
         baseurl: https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
@@ -38,13 +38,13 @@
         enabled: yes
 
     - name: Install worker packages
-      dnf:
+      yum:
         name:
           - kubelet-{{ kube_version }}
           - kubeadm-{{ kube_version }}
         state: present
 
-    - name: Add Docker and containerd repository (CentOS 7)
+    - name: Add Docker and containerd repository
       yum_repository:
         name: docker-ce
         description: Docker CE Repository
@@ -52,20 +52,9 @@
         gpgkey: https://download.docker.com/linux/centos/gpg
         gpgcheck: yes
         enabled: yes
-      when: ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
-
-    - name: Add Docker and containerd repository (CentOS 8)
-      dnf_repository:
-        name: docker-ce
-        description: Docker CE Repository
-        baseurl: https://download.docker.com/linux/centos/8/x86_64/stable/
-        gpgkey: https://download.docker.com/linux/centos/gpg
-        gpgcheck: yes
-        enabled: yes
-      when: ansible_distribution == "CentOS" and ansible_distribution_major_version == "8"
 
     - name: Install container runtime (containerd)
-      dnf:
+      yum:
         name:
           - containerd.io
         state: present
@@ -108,8 +97,3 @@
     - name: Join worker to cluster
       command: "{{ join_command.stdout }}"
       when: inventory_hostname in groups.workers
-
-- name: Wait for node to be reachable after reboot
-  wait_for_connection:
-    timeout: 600
-  when: ansible_reboot_pending | default(false)
