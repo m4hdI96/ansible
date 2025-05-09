@@ -2,9 +2,9 @@
 ---
 - name: Configure system prerequisites
   block:
-    - name: Install firewalld dependencies
+    - name: Install firewalld Python bindings
       dnf:
-        name: python3-firewalld
+        name: python3-firewall
         state: present
       when: ansible_os_family == "RedHat"
 
