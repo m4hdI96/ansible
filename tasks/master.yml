@@ -1,6 +1,5 @@
----
 # tasks/master.yml
-
+---
 # 1) Generate & expose an SSH keypair for pfe on the master node
 - name: Ensure /home/pfe/.ssh exists on master
   file:
@@ -11,18 +10,33 @@
     mode: '0700'
 
 - name: Generate SSH keypair for pfe (if missing)
-  openssh_keypair:
+  become_user: pfe
+  command: ssh-keygen -t rsa -b 4096 -f /home/pfe/.ssh/id_rsa -N ''
+  args:
+    creates: /home/pfe/.ssh/id_rsa
+
+- name: Set permissions on private key
+  file:
     path: /home/pfe/.ssh/id_rsa
-    type: rsa
-    size: 4096
     owner: pfe
     group: pfe
     mode: '0600'
-  register: master_key
+
+- name: Set permissions on public key
+  file:
+    path: /home/pfe/.ssh/id_rsa.pub
+    owner: pfe
+    group: pfe
+    mode: '0644'
+
+- name: Read controller public key
+  slurp:
+    src: /home/pfe/.ssh/id_rsa.pub
+  register: slurped_master_pubkey
 
 - name: Save controller public key for distribution
   set_fact:
-    controller_pubkey: "{{ master_key.public_key }}"
+    controller_pubkey: "{{ slurped_master_pubkey.content | b64decode }}"
 
 # 2) The rest of your master setup...
 - name: Install required packages
