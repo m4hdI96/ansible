@@ -1,6 +1,5 @@
 # tasks/worker.yml
 ---
-# 1) Ensure the SSH directory exists
 - name: Ensure /home/pfe/.ssh exists on worker
   file:
     path: /home/pfe/.ssh
@@ -9,15 +8,13 @@
     group: pfe
     mode: '0700'
 
-# 2) Authorize the controller’s key
 - name: Authorize controller’s SSH key on worker
   authorized_key:
     user: pfe
     key: "{{ hostvars[groups.master[0]].controller_pubkey }}"
     state: present
 
-# 3) Install prerequisites for container runtime
-- name: Prepare Kubernetes components
+- name: Install & configure containerd on worker
   block:
     - name: Install dependencies
       yum:
@@ -27,7 +24,7 @@
           - lvm2
         state: present
 
-    - name: Add Kubernetes repository
+    - name: Add Kubernetes repo
       yum_repository:
         name: kubernetes
         description: Kubernetes RPM Repository
@@ -67,7 +64,6 @@
         enabled: yes
         state: restarted
 
-# 4) Join the cluster
 - name: Fetch join command from master
   command: cat /tmp/join-command.sh
   register: join_command
