@@ -1,4 +1,3 @@
-# tasks/master.yml
 ---
 - name: Ensure /home/pfe/.ssh exists on master
   file:
@@ -9,24 +8,14 @@
     mode: '0700'
 
 - name: Generate SSH keypair for pfe (if missing)
-  become_user: pfe
-  command: ssh-keygen -t rsa -b 4096 -f /home/pfe/.ssh/id_rsa -N ''
-  args:
-    creates: /home/pfe/.ssh/id_rsa
-
-- name: Set permissions on private key
-  file:
+  openssh_keypair:
     path: /home/pfe/.ssh/id_rsa
+    type: rsa
+    size: 4096
     owner: pfe
     group: pfe
     mode: '0600'
-
-- name: Set permissions on public key
-  file:
-    path: /home/pfe/.ssh/id_rsa.pub
-    owner: pfe
-    group: pfe
-    mode: '0644'
+  register: master_key
 
 - name: Read controller public key
   slurp:
@@ -40,7 +29,7 @@
 - name: Install & configure containerd
   block:
     - name: Install containerd
-      yum:
+      dnf:
         name: containerd
         state: present
 
@@ -83,7 +72,7 @@
         enabled: yes
 
     - name: Install kubelet, kubeadm, kubectl
-      yum:
+      dnf:
         name:
           - kubelet-{{ kube_version }}
           - kubeadm-{{ kube_version }}
@@ -112,6 +101,12 @@
       args:
         creates: /etc/kubernetes/admin.conf
 
+    - name: Verify admin.conf exists
+      stat:
+        path: /etc/kubernetes/admin.conf
+      register: admin_conf_stat
+      failed_when: not admin_conf_stat.stat.exists
+
     - name: Ensure .kube directory for pfe
       file:
         path: /home/pfe/.kube
@@ -127,6 +122,7 @@
         owner: pfe
         group: pfe
         mode: '0644'
+        remote_src: yes
 
     - name: Generate worker join command
       shell: kubeadm token create --print-join-command > /tmp/join-command.sh
@@ -135,9 +131,36 @@
 
     - name: Install Flannel CNI
       shell: kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+      environment:
+        KUBECONFIG: /home/pfe/.kube/config
+
+    - name: Configure CoreDNS
+      block:
+        - name: Deploy CoreDNS config
+          template:
+            src: templates/coredns-configmap.j2
+            dest: /tmp/coredns-configmap.yaml
+
+        - name: Apply DNS configuration
+          shell: kubectl apply -f /tmp/coredns-configmap.yaml
+          environment:
+            KUBECONFIG: /home/pfe/.kube/config
+          register: dns_apply
+          changed_when: "'configured' not in dns_apply.stdout"
+
+        - name: Restart CoreDNS pods
+          shell: kubectl delete pod -n kube-system -l k8s-app=kube-dns
+          environment:
+            KUBECONFIG: /home/pfe/.kube/config
+          when: dns_apply.changed
 
     - name: Verify join command exists
       stat:
         path: /tmp/join-command.sh
       register: join_cmd_file
       failed_when: not join_cmd_file.stat.exists
+
+- name: Wait for node to be reachable after reboot
+  wait_for_connection:
+    timeout: 600
+  when: ansible_reboot_pending | default(false)
