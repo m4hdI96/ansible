@@ -7,11 +7,19 @@
     group: pfe
     mode: '0700'
 
+- name: Fetch controller’s SSH public key from master
+  slurp:
+    src: /home/pfe/.ssh/id_rsa.pub
+  delegate_to: "{{ groups.master[0] }}"
+  register: master_pubkey
+  ignore_errors: yes
+
 - name: Authorize controller’s SSH key on worker
   authorized_key:
     user: pfe
-    key: "{{ hostvars[groups.master[0]].controller_pubkey }}"
+    key: "{{ master_pubkey.content | b64decode | default('') }}"
     state: present
+  when: master_pubkey is success and master_pubkey.content is defined
 
 - name: Install & configure containerd on worker
   block:
@@ -74,11 +82,19 @@
   shell: kubeadm token create --print-join-command > /tmp/join-command.sh
   delegate_to: "{{ groups.master[0] }}"
   run_once: yes
-  when: join_command.failed
+  when: join_command.failed or join_command.rc != 0
+
+- name: Verify join command exists
+  stat:
+    path: /tmp/join-command.sh
+  delegate_to: "{{ groups.master[0] }}"
+  register: join_cmd_file
+  run_once: yes
+  failed_when: not join_cmd_file.stat.exists
 
 - name: Execute join command
   command: "{{ join_command.stdout }}"
-  when: inventory_hostname in groups.workers
+  when: inventory_hostname in groups.workers and join_command is success and join_command.rc == 0
 
 - name: Wait for node to be reachable after reboot
   wait_for_connection:
